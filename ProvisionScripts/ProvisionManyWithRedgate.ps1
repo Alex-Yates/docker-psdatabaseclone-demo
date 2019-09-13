@@ -2,6 +2,8 @@ params(
     $totalClones = 10
 )
 
+Connect-SqlClone -ServerUrl 'http://win2012r2:14145'
+
 $image = Get-SqlCloneImage -Name 'StackOverflow2010_Masked'
  
 $ClonePrefix = 'PruskiReallySucksTimes'
