@@ -1,4 +1,6 @@
 <#
+  THIS SCRIPT DOES NOT YET WORK
+
   This script provisions the source image. Expect it to take approximately as long as a backup restore.
   Under most circumstances your source image will be created as follows:
   1. Restore the latest production backup into a staging area, within your production domain/security perimeter (since it contains prod data)
@@ -11,29 +13,55 @@
 #>
 
 param (
-    [string]$sourceSqlInstance = ".", 
     [string]$destinationSqlInstance = ".",    
     [string]$imageNetworkPath = "//DESKTOP-PO8SQUD/psdatabaseclonetestimages2",
-    [string]$database = "testymctestface"
+    [string]$database = "testymctestface",
+    [string]$cloneName = "testymctestface_clone2"
 )
 
 $ErrorActionPreference = "Stop"
 
 # import required powershell modules
-#import-module dbatools
-#import-module psframework
-#import-module psdatabaseclone
+import-module dbatools
+import-module psframework
+import-module psdatabaseclone
 
 # logging
-Write-Verbose "sourceSqlinstance is: $sourceSqlInstance"
 Write-Verbose "destinationSqlInstance is: $destinationSqlInstance"
 Write-Verbose "imageNetworkPath is: $imageNetworkPath"
 Write-Verbose "database is: $database"
 
+
 # create credential
 $cred = Get-Credential  
 
-# create image
-New-PSDCImage -SourceSqlInstance $sourceSqlInstance -DestinationSqlInstance $destinationSqlInstance `
- -ImageNetworkPath $imageNetworkPath -Database $database -CreateFullBackup `
- -SourceSqlCredential $cred -DestinationSqlCredential $cred
+# create clone
+Write-Output "Creating clone $cloneName on $destinationSqlInstance"
+New-PSDCClone -SqlInstance $destinationSqlInstance -CloneName $cloneName -Database $database -LatestImage -SqlCredential $cred
+
+<#
+# Detach the clone
+Write-Output "Detatching database $cloneName on $destinationSqlInstance"
+$sql = "master.dbo.sp_detach_db @dbname = N'$cloneName';"
+Invoke-Sqlcmd -ServerInstance $destinationSqlInstance -Query $sql
+#>
+
+# spin up container with clone files location
+Write-Output "Spinning up a container"
+docker run -d -p 15799:1433 `
+--env ACCEPT_EULA=Y --env SA_PASSWORD=Password1122 `
+-v C:\sqlserver\clone:/opt/sqlserver `
+--name testcontainer2 `
+mcr.microsoft.com/mssql/server
+
+<#
+# reattach the database
+Write-Output "Attaching cloned database inside container"
+$fileStructure = New-Object System.Collections.Specialized.StringCollection
+    $fileStructure.Add('/opt/sqlserver/testdatabase_clone_tsCzJ/data/testdatabase.mdf')
+    $filestructure.Add('/opt/sqlserver/testdatabase_clone_tsCzJ/log/testdatabase_log.ldf')
+
+Mount-DbaDatabase -SqlInstance "localhost,15789" `
+    -Database $cloneName -SqlCredential $Cred `
+        -FileStructure $fileStructure
+#>
