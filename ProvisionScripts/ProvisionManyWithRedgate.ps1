@@ -14,7 +14,7 @@ $ClonePrefix = 'PruskiReallySucksTimes'
 $elapsed = [System.Diagnostics.Stopwatch]::StartNew()
 "Started at {0}" -f $(get-date)
  
-"OK, going to create {0} clones" -f $Count
+"OK, going to create $totalClones clones" -f $Count
  
 for ($i=0;$i -lt $totalClones;$i++)
 {
